@@ -66,6 +66,47 @@ CLIP_DOWN = -CLIP_UP
 
 clip_grad = np.clip(grad, CLIP_DOWN, CLIP_UP)
 clip_grad2 = np.clip(grad2, CLIP_DOWN, CLIP_UP)
+degrees = np.arange(n) * 360 / n
+
+# curvature
+K = np.abs(grad2) / np.power(1 + np.square(grad), 1.5)
+
+# chord len
+diff_xy = xy - np.concatenate([xy[1:, :], xy[0:1, :]])
+chord_len = np.sqrt(np.square(diff_xy).sum(axis=1))
+cum_chord_len = np.cumsum(chord_len)
+
+
+def get_uniform_sample(n, xy, standard):
+    assert len(xy) == len(standard), (len(xy), len(standard))
+    m = len(xy)
+    assert m >= 3
+    result = np.empty((n, ) + xy.shape[1:])
+    result[0, :] = xy[0, :]
+    sum_standard = standard.sum() - standard[-1]
+    if n > 1:
+        interval = sum_standard / (n-1)
+        i = 1
+        j = 1
+        value = standard[0] - interval
+        while i < n and j < m:
+            if value >= 0:
+                result[i, :] = xy[j, :]
+                value -= interval
+                i += 1
+            value += standard[j]
+            j += 1
+        assert i == n, (i, n)
+    return result
+
+min_angle = np.pi / 10
+max_angle = 3 * np.pi / 10
+min_i = int(np.round(min_angle / delta))
+max_i = int(np.round(max_angle / delta))
+idx = slice(min_i, max_i + 1)
+
+sample_size = max_i - min_i + 1
+sample_xy = get_uniform_sample(4, xy[idx, :], np.ones(sample_size))
 
 plt.subplot(231, projection='polar')
 plt.title('polar')
@@ -82,32 +123,44 @@ plt.plot(theta, clip_grad2)
 plt.subplot(234)
 plt.title('x-y')
 plt.plot(xy[:, 0], xy[:, 1])
+plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'r.')
 plt.axis('equal')
 plt.axis((-1, 1, -1, 1))
 
 plt.subplot(235)
 plt.title('dy/dx')
-plt.plot(np.arange(n) * 360 / n, clip_grad)
+plt.plot(degrees, clip_grad)
 
 plt.subplot(236)
 plt.title('d2y/dx2')
-plt.plot(np.arange(n) * 360 / n, clip_grad2)
+plt.plot(degrees, clip_grad2)
 
 
 plt.show()
 
-plt.subplot(221)
-plt.subplot(231, projection='polar')
+plt.subplot(321, projection='polar')
 plt.title('polar')
 plt.plot(theta, get_r(theta))
 
-plt.subplot(222)
+plt.subplot(322)
 plt.title('curvature')
-K = np.abs(grad2) / np.power(1 + np.square(grad), 1.5)
-plt.plot(np.arange(n) * 360 / n, K)
+plt.plot(degrees, K)
 
-plt.subplot(223, projection='polar')
+plt.subplot(323, projection='polar')
 plt.title('curvature (polar)')
 plt.plot(theta, K)
+
+plt.subplot(324, projection='polar')
+plt.title('chord length')
+plt.plot(theta, chord_len)
+
+plt.subplot(325)
+plt.title('chord length')
+plt.plot(degrees, chord_len)
+
+plt.subplot(326)
+plt.title('cumulative sum of chord length')
+plt.plot(degrees, cum_chord_len)
+
 
 plt.show()
