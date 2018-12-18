@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def evaluate(f, x, y):
-    pred = f(x)
-    diff = pred - y
+def evaluate(f, t, xy):
+    pred = f(t)
+    diff = pred - xy
     return np.sqrt(np.square(diff).mean())

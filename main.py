@@ -115,7 +115,10 @@ def get_uniform_sample(n, xy, standard):
                 i += 1
             value += standard[j]
             j += 1
-        assert i == n, (i, n)
+        if i == n - 1 and j >= m:
+            result[i, :] = xy[-1, :]
+            i += 1
+        assert i == n, (i, n, j, m, value)
     return result
 
 
@@ -125,32 +128,56 @@ def compute_range(min_angle, max_angle):
 
     sample_size = 5
     sample_range_size = max_i - min_i + 1
+    test_size = sample_range_size
     valid_xy = get_items(xy, min_i, max_i + 1)
     valid_chord_len = get_items(chord_len, min_i, max_i + 1)
-# sample_xy = get_uniform_sample(sample_size, valid_xy, np.ones(sample_range_size))
-    sample_xy = get_uniform_sample(sample_size, valid_xy, valid_chord_len)
-# ts = parameter.get_uniform(sample_xy)
-    func = fitting.get_bspline(sample_xy[:, 0], sample_xy[:, 1], 1)
+    valid_grad = get_items(grad, min_i, max_i + 1)
+    valid_grad2 = get_items(grad2, min_i, max_i + 1)
+    # sample_xy = get_uniform_sample(sample_size, valid_xy, valid_chord_len)
 
-    sample_error = evaluate.evaluate(func, sample_xy[:, 0], sample_xy[:, 1])
-    valid_error = evaluate.evaluate(func, valid_xy[:, 0], valid_xy[:, 1])
-    pred_y = func(valid_xy[:, 0])
-    print(sample_error, valid_error)
+    sample_xy = get_uniform_sample(sample_size, valid_xy, np.ones(sample_range_size))
+    sample_t = parameter.get_uniform(sample_xy)
 
-    plt.title('x-y')
-    plt.plot(xy[:, 0], xy[:, 1])
+    test_xy = get_uniform_sample(test_size, valid_xy, np.ones(sample_range_size))
+    test_t = parameter.get_uniform(test_xy)
+    '''
+    bc_type = ([(1, valid_grad[0]), (2, valid_grad2[0])],
+            [(1, valid_grad[-1]), (2, valid_grad2[-1])])
+    '''
+    bc_type = None
+    func = fitting.get_bspline(sample_t, sample_xy, k=2, bc_type=bc_type)
+
+    sample_error = evaluate.evaluate(func, sample_t, sample_xy)
+    test_error = evaluate.evaluate(func, test_t, test_xy)
+
+    print(sample_error, test_error)
+
+    pred = func(sample_t)
+    pred_x = pred[:, 0]
+    pred_y = pred[:, 1]
+    # print(len(pred_x), sample_error, valid_error)
     plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
-    plt.plot(valid_xy[:, 0], pred_y, 'r')
-    plt.axis('equal')
-    plt.axis((-1, 1, -1, 1))
-    plt.show()
+    return pred_x, pred_y
 
+
+# plt.subplot(121)
+# plt.title('x-y')
+plt.plot(xy[:, 0], xy[:, 1])
 
 min_angle = np.pi / 10
 max_angle = 3 * np.pi / 10
 
-compute_range(min_angle, max_angle)
+# plt.subplot(122)
+# plt.title('pred')
+for _ in range(10):
+    pred_x, pred_y = compute_range(min_angle, max_angle)
+    plt.plot(pred_x, pred_y, 'r')
+    plt.axis('equal')
+    min_angle += np.pi / 5
+    max_angle += np.pi / 5
 
+plt.axis((-1, 1, -1, 1))
+plt.show()
 
 plt.subplot(231, projection='polar')
 plt.title('polar')
