@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import parameter
+import fitting
+import evaluate
 
 
 # r = 0.5 + 0.2sin(5t)
@@ -10,6 +13,17 @@ get_dx_div_dt = lambda theta: np.cos(5 * theta) * np.cos(theta) - np.sin(theta) 
 
 # dy/dt = cos(5t)sin(t) + r * cos(t)
 get_dy_div_dt = lambda theta: np.cos(5 * theta) * np.sin(theta) + np.cos(theta) * get_r(theta)
+
+
+def get_items(data, begin, end):
+    assert begin < end
+    m = len(data)
+    if begin < 0:
+        k = int(np.ceil(-begin * 1.0 / m)) * m
+        begin += k
+        end += k
+    idx = [i % m for i in range(begin, end)]
+    return data[idx]
 
 
 def get_interface(theta):
@@ -53,6 +67,12 @@ def get_d2y_div_dx2(theta):
     return d2y_div_dx2
 
 
+def get_dis(xy):
+    diff_xy = xy - np.concatenate([xy[1:, :], xy[0:1, :]])
+    dis = np.sqrt(np.square(diff_xy).sum(axis=1))
+    return dis
+
+
 n = 10000
 delta = 2 * np.pi / n
 theta = np.arange(n) * delta
@@ -72,8 +92,7 @@ degrees = np.arange(n) * 360 / n
 K = np.abs(grad2) / np.power(1 + np.square(grad), 1.5)
 
 # chord len
-diff_xy = xy - np.concatenate([xy[1:, :], xy[0:1, :]])
-chord_len = np.sqrt(np.square(diff_xy).sum(axis=1))
+chord_len = get_dis(xy)
 cum_chord_len = np.cumsum(chord_len)
 
 
@@ -99,14 +118,39 @@ def get_uniform_sample(n, xy, standard):
         assert i == n, (i, n)
     return result
 
+
+def compute_range(min_angle, max_angle):
+    min_i = int(np.round(min_angle / delta))
+    max_i = int(np.round(max_angle / delta))
+
+    sample_size = 5
+    sample_range_size = max_i - min_i + 1
+    valid_xy = get_items(xy, min_i, max_i + 1)
+    valid_chord_len = get_items(chord_len, min_i, max_i + 1)
+# sample_xy = get_uniform_sample(sample_size, valid_xy, np.ones(sample_range_size))
+    sample_xy = get_uniform_sample(sample_size, valid_xy, valid_chord_len)
+# ts = parameter.get_uniform(sample_xy)
+    func = fitting.get_bspline(sample_xy[:, 0], sample_xy[:, 1], 1)
+
+    sample_error = evaluate.evaluate(func, sample_xy[:, 0], sample_xy[:, 1])
+    valid_error = evaluate.evaluate(func, valid_xy[:, 0], valid_xy[:, 1])
+    pred_y = func(valid_xy[:, 0])
+    print(sample_error, valid_error)
+
+    plt.title('x-y')
+    plt.plot(xy[:, 0], xy[:, 1])
+    plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
+    plt.plot(valid_xy[:, 0], pred_y, 'r')
+    plt.axis('equal')
+    plt.axis((-1, 1, -1, 1))
+    plt.show()
+
+
 min_angle = np.pi / 10
 max_angle = 3 * np.pi / 10
-min_i = int(np.round(min_angle / delta))
-max_i = int(np.round(max_angle / delta))
-idx = slice(min_i, max_i + 1)
 
-sample_size = max_i - min_i + 1
-sample_xy = get_uniform_sample(4, xy[idx, :], np.ones(sample_size))
+compute_range(min_angle, max_angle)
+
 
 plt.subplot(231, projection='polar')
 plt.title('polar')
@@ -123,7 +167,8 @@ plt.plot(theta, clip_grad2)
 plt.subplot(234)
 plt.title('x-y')
 plt.plot(xy[:, 0], xy[:, 1])
-plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'r.')
+plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
+plt.plot(valid_xy[:, 0], pred_y, 'r')
 plt.axis('equal')
 plt.axis((-1, 1, -1, 1))
 
