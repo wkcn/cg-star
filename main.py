@@ -6,13 +6,23 @@ import evaluate
 
 
 # r = 0.5 + 0.2sin(5t)
-get_r = lambda theta: 0.5 + 0.2 * np.sin(5 * theta)
+def get_r(theta): return 0.5 + 0.2 * np.sin(5 * theta)
 
 # dx/dt = cos(5t)cos(t) - r * sin(t)
-get_dx_div_dt = lambda theta: np.cos(5 * theta) * np.cos(theta) - np.sin(theta) * get_r(theta)
+def get_dx_div_dt(theta): return np.cos(5 * theta) * \
+    np.cos(theta) - np.sin(theta) * get_r(theta)
 
 # dy/dt = cos(5t)sin(t) + r * cos(t)
-get_dy_div_dt = lambda theta: np.cos(5 * theta) * np.sin(theta) + np.cos(theta) * get_r(theta)
+def get_dy_div_dt(theta): return np.cos(5 * theta) * \
+    np.sin(theta) + np.cos(theta) * get_r(theta)
+
+
+def get_d2x_div_dt2(theta): return (-5.2 * np.sin(5 * theta) - 0.5) * \
+    np.cos(theta) - 2 * np.cos(5 * theta) * np.sin(theta)
+
+
+def get_d2y_div_dt2(theta): return (-5.2 * np.sin(5 * theta) - 0.5) * \
+    np.sin(theta) + 2 * np.cos(5 * theta) * np.cos(theta)
 
 
 def get_items(data, begin, end):
@@ -24,6 +34,16 @@ def get_items(data, begin, end):
         end += k
     idx = [i % m for i in range(begin, end)]
     return data[idx]
+
+
+def get_angle_from_xy(xy):
+    with np.errstate(divide='ignore'):
+        angle = np.arctan(xy[:, 1] / xy[:, 0])
+    left_x = xy[:, 0] < 0
+    return angle + left_x * np.pi
+
+
+assert np.allclose(get_angle_from_xy(np.array([[1, 1], [0, 2], [-1, 0], [-1, -1]])), np.array([np.pi / 4, np.pi / 2, np.pi, np.pi / 4 * 5]))
 
 
 def get_interface(theta):
@@ -57,11 +77,10 @@ def get_d2y_div_dx2(theta):
     r = get_r(theta)
     dx_div_dt = get_dx_div_dt(theta)
 
-    # d2x_div_dt2 = (-5.2 * np.sin(5 * theta) - 0.5) * np.cos(theta) - 2 * np.cos(5 * theta) * np.sin(theta)
-    # d2y_div_dt2 = (-5.2 * np.sin(5 * theta) - 0.5) * np.sin(theta) + 2 * np.cos(5 * theta) * np.cos(theta)
-
-    up = (1.04 * np.square(np.sin(5 * theta)) + 2.7 * np.sin(5 * theta) + 2 * np.square(np.cos(5 * theta)) + 0.25)
-    down = np.square(np.sin(theta) * (-0.2 * np.sin(5 * theta) - 0.5) + np.cos(theta) * np.cos(5 * theta))
+    up = (1.04 * np.square(np.sin(5 * theta)) + 2.7
+          * np.sin(5 * theta) + 2 * np.square(np.cos(5 * theta)) + 0.25)
+    down = np.square(np.sin(theta) * (-0.2 * np.sin(5 * theta)
+                                      - 0.5) + np.cos(theta) * np.cos(5 * theta))
     d2y_div_dx2 = up / down / dx_div_dt
 
     return d2y_div_dx2
@@ -104,7 +123,7 @@ def get_uniform_sample(n, xy, standard):
     result[0, :] = xy[0, :]
     sum_standard = standard.sum() - standard[-1]
     if n > 1:
-        interval = sum_standard / (n-1)
+        interval = sum_standard / (n - 1)
         i = 1
         j = 1
         value = standard[0] - interval
@@ -129,45 +148,70 @@ def is_same_end_points(a, b):
 def compute_range(min_angle, max_angle):
     min_i = int(np.round(min_angle / delta))
     max_i = int(np.round(max_angle / delta))
-    print ("Range: ", min_i, max_i)
+    print("Range: ", min_i, max_i)
 
     sample_size = 5
+    test_size = 10000
+    K = 3
     sample_range_size = max_i - min_i
-    test_size = sample_range_size
+    # fitting_method = fitting.get_bspline
+    # fitting_method = fitting.get_bezier
+    fitting_method = fitting.get_poly
+    USE_GRAD = 0
+    assert 0 <= USE_GRAD <= 2
+
+    # Let us denote the points in range [min_i, max_i] valid
     valid_xy = get_items(xy, min_i, max_i)
     valid_chord_len = get_items(chord_len, min_i, max_i)
     valid_grad = get_items(grad, min_i, max_i)
     valid_grad2 = get_items(grad2, min_i, max_i)
-    # sample_xy = get_uniform_sample(sample_size, valid_xy, valid_chord_len)
 
-    sample_xy = get_uniform_sample(sample_size, valid_xy, np.ones(sample_range_size))
+    # sampling
+    sample_xy = get_uniform_sample(
+        sample_size, valid_xy, np.ones(sample_range_size))
+    sample_theta = get_angle_from_xy(sample_xy)
     assert is_same_end_points(sample_xy, valid_xy)
+    print('min_angle', sample_theta[0], min_angle)
+    print('max_angle', sample_theta[-1], max_angle)
+
+    s_min_angle = sample_theta[0]
+    s_max_angle = sample_theta[-1]
+
+    # parameter for t
     sample_t = parameter.get_uniform(sample_xy)
 
-    test_xy = get_uniform_sample(test_size, valid_xy, np.ones(sample_range_size))
-    assert is_same_end_points(test_xy, valid_xy)
-    test_t = parameter.get_uniform(test_xy)
-    '''
-    bc_type = ([(1, valid_grad[0]), (2, valid_grad2[0])],
-            [(1, valid_grad[-1]), (2, valid_grad2[-1])])
-    '''
-    bc_type = None
-    
-    # fitting_method = fitting.get_bspline
-    fitting_method = fitting.get_bezier
-    func = fitting_method(sample_t, sample_xy, k=3, bc_type=bc_type)
+    if USE_GRAD == 0:
+        bc_type = None
+    else:
+        bc_type = [[], []]
+        grad_left = np.array([get_dx_div_dt(s_min_angle), get_dy_div_dt(s_min_angle)])
+        grad_right = np.array([get_dx_div_dt(s_max_angle), get_dy_div_dt(s_max_angle)])
+        bc_type[0].append((1, grad_left))
+        bc_type[1].append((1, grad_right))
+        if USE_GRAD == 2:
+            grad2_left = np.array([get_d2x_div_dt2(s_min_angle), get_d2y_div_dt2(s_min_angle)])
+            grad2_right = np.array([get_d2x_div_dt2(s_max_angle), get_d2y_div_dt2(s_max_angle)])
+            bc_type[0].append((2, grad2_left))
+            bc_type[1].append((2, grad2_right))
+
+
+    func = fitting_method(sample_t, sample_xy, k=K, bc_type=bc_type)
 
     sample_error = evaluate.evaluate(func, sample_t, sample_xy)
-    test_error = evaluate.evaluate(func, test_t, test_xy)
 
-    print(sample_error, test_error)
+    # test
+    test_t = np.arange(test_size) / test_size
+    pred_xy = func(test_t)
+    gt_theta = get_angle_from_xy(pred_xy)
+    gt_xy = get_interface(gt_theta)
+    test_error = evaluate.diff(pred_xy, gt_xy, order=2)
 
-    pred = func(test_t)
-    pred_x = pred[:, 0]
-    pred_y = pred[:, 1]
+    print('Sample Error: %s, Test Error: %s' % (sample_error, test_error))
+
+    # assert is_same_end_points(pred, valid_xy)
     # print(len(pred_x), sample_error, valid_error)
     plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
-    return pred_x, pred_y
+    return pred_xy
 
 
 # plt.subplot(121)
@@ -179,13 +223,18 @@ max_angle = 3 * np.pi / 10
 
 # plt.subplot(122)
 # plt.title('pred')
+preds = []
 for _ in range(10):
-    pred_x, pred_y = compute_range(min_angle, max_angle)
-    plt.plot(pred_x, pred_y, 'r')
-    plt.axis('equal')
+    pred = compute_range(min_angle, max_angle)
+    plt.plot(pred[:, 0], pred[:, 1], 'r')
+    # preds.append(pred)
     min_angle += np.pi / 5
     max_angle += np.pi / 5
 
+# pred = np.concatenate(preds, 0)
+# plt.plot(pred[:, 0], pred[:, 1], 'r')
+
+plt.axis('equal')
 plt.axis((-1, 1, -1, 1))
 plt.show()
 
@@ -204,8 +253,8 @@ plt.plot(theta, clip_grad2)
 plt.subplot(234)
 plt.title('x-y')
 plt.plot(xy[:, 0], xy[:, 1])
-plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
-plt.plot(valid_xy[:, 0], pred_y, 'r')
+# plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
+# plt.plot(valid_xy[:, 0], pred_y, 'r')
 plt.axis('equal')
 plt.axis((-1, 1, -1, 1))
 
