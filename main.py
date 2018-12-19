@@ -122,37 +122,47 @@ def get_uniform_sample(n, xy, standard):
     return result
 
 
+def is_same_end_points(a, b):
+    return (a[0] == b[0]).all() and (a[-1] == b[-1]).all()
+
+
 def compute_range(min_angle, max_angle):
     min_i = int(np.round(min_angle / delta))
     max_i = int(np.round(max_angle / delta))
+    print ("Range: ", min_i, max_i)
 
     sample_size = 5
-    sample_range_size = max_i - min_i + 1
+    sample_range_size = max_i - min_i
     test_size = sample_range_size
-    valid_xy = get_items(xy, min_i, max_i + 1)
-    valid_chord_len = get_items(chord_len, min_i, max_i + 1)
-    valid_grad = get_items(grad, min_i, max_i + 1)
-    valid_grad2 = get_items(grad2, min_i, max_i + 1)
+    valid_xy = get_items(xy, min_i, max_i)
+    valid_chord_len = get_items(chord_len, min_i, max_i)
+    valid_grad = get_items(grad, min_i, max_i)
+    valid_grad2 = get_items(grad2, min_i, max_i)
     # sample_xy = get_uniform_sample(sample_size, valid_xy, valid_chord_len)
 
     sample_xy = get_uniform_sample(sample_size, valid_xy, np.ones(sample_range_size))
+    assert is_same_end_points(sample_xy, valid_xy)
     sample_t = parameter.get_uniform(sample_xy)
 
     test_xy = get_uniform_sample(test_size, valid_xy, np.ones(sample_range_size))
+    assert is_same_end_points(test_xy, valid_xy)
     test_t = parameter.get_uniform(test_xy)
     '''
     bc_type = ([(1, valid_grad[0]), (2, valid_grad2[0])],
             [(1, valid_grad[-1]), (2, valid_grad2[-1])])
     '''
     bc_type = None
-    func = fitting.get_bspline(sample_t, sample_xy, k=2, bc_type=bc_type)
+    
+    # fitting_method = fitting.get_bspline
+    fitting_method = fitting.get_bezier
+    func = fitting_method(sample_t, sample_xy, k=3, bc_type=bc_type)
 
     sample_error = evaluate.evaluate(func, sample_t, sample_xy)
     test_error = evaluate.evaluate(func, test_t, test_xy)
 
     print(sample_error, test_error)
 
-    pred = func(sample_t)
+    pred = func(test_t)
     pred_x = pred[:, 0]
     pred_y = pred[:, 1]
     # print(len(pred_x), sample_error, valid_error)
