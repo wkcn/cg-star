@@ -108,7 +108,7 @@ clip_grad2 = np.clip(grad2, CLIP_DOWN, CLIP_UP)
 degrees = np.arange(n) * 360 / n
 
 # curvature
-K = np.abs(grad2) / np.power(1 + np.square(grad), 1.5)
+curvature = np.abs(grad2) / np.power(1 + np.square(grad), 1.5)
 
 # chord len
 chord_len = get_dis(xy)
@@ -150,25 +150,41 @@ def compute_range(min_angle, max_angle):
     max_i = int(np.round(max_angle / delta))
     print("Range: ", min_i, max_i)
 
+    '''basic'''
     sample_size = 5
     test_size = 10000
     K = 3
     sample_range_size = max_i - min_i
+
+    '''fitting'''
     # fitting_method = fitting.get_bspline
     # fitting_method = fitting.get_bezier
     fitting_method = fitting.get_poly
+
+    '''parameter'''
+    parameter_method = parameter.get_uniform
+    # parameter_method = parameter.get_cum_chord
+    # parameter_method = parameter.get_entad
+
+    '''gradient'''
     USE_GRAD = 0
     assert 0 <= USE_GRAD <= 2
 
     # Let us denote the points in range [min_i, max_i] valid
     valid_xy = get_items(xy, min_i, max_i)
     valid_chord_len = get_items(chord_len, min_i, max_i)
+    valid_curvature = get_items(curvature, min_i, max_i)
     valid_grad = get_items(grad, min_i, max_i)
     valid_grad2 = get_items(grad2, min_i, max_i)
+    print("chord_len: ", valid_chord_len.min(), valid_chord_len.max())
+    print("curvature: ", curvature.min(), curvature.max())
 
-    # sampling
-    sample_xy = get_uniform_sample(
-        sample_size, valid_xy, np.ones(sample_range_size))
+    '''sampling'''
+    sample_xy = get_uniform_sample(sample_size, valid_xy,\
+        np.ones(sample_range_size))
+        # 1.0 / (1.0 + valid_chord_len / 0.1))
+        # 1.0 / (1.0 + valid_curvature/50))
+
     sample_theta = get_angle_from_xy(sample_xy)
     assert is_same_end_points(sample_xy, valid_xy)
     print('min_angle', sample_theta[0], min_angle)
@@ -178,7 +194,7 @@ def compute_range(min_angle, max_angle):
     s_max_angle = sample_theta[-1]
 
     # parameter for t
-    sample_t = parameter.get_uniform(sample_xy)
+    sample_t = parameter_method(sample_xy)
 
     if USE_GRAD == 0:
         bc_type = None
@@ -275,11 +291,11 @@ plt.plot(theta, get_r(theta))
 
 plt.subplot(322)
 plt.title('curvature')
-plt.plot(degrees, K)
+plt.plot(degrees, curvature)
 
 plt.subplot(323, projection='polar')
 plt.title('curvature (polar)')
-plt.plot(theta, K)
+plt.plot(theta, curvature)
 
 plt.subplot(324, projection='polar')
 plt.title('chord length')
