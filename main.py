@@ -63,6 +63,7 @@ def get_interface(theta):
 def get_dy_div_dx(theta):
     dx_div_dt = get_dx_div_dt(theta)
     dy_div_dt = get_dy_div_dt(theta)
+
     # dy/dx = (cos(5t)sin(t) + (0.5 + 0.2sin(5t)) * cos(t)) / (cos(5t)cos(t) - (0.5 + 0.2sin(5t)) * sin(t))
     dy_div_dx = dy_div_dt / dx_div_dt
     return dy_div_dx
@@ -151,9 +152,10 @@ def compute_range(min_angle, max_angle):
     print("Range: ", min_i, max_i)
 
     '''basic'''
-    sample_size = 5
+    sample_size = 4
     test_size = 10000
     K = 3
+    assert 0 <= K < sample_size
     sample_range_size = max_i - min_i
 
     '''fitting'''
@@ -185,13 +187,7 @@ def compute_range(min_angle, max_angle):
         # 1.0 / (1.0 + valid_chord_len / 0.1))
         # 1.0 / (1.0 + valid_curvature/50))
 
-    sample_theta = get_angle_from_xy(sample_xy)
     assert is_same_end_points(sample_xy, valid_xy)
-    print('min_angle', sample_theta[0], min_angle)
-    print('max_angle', sample_theta[-1], max_angle)
-
-    s_min_angle = sample_theta[0]
-    s_max_angle = sample_theta[-1]
 
     # parameter for t
     sample_t = parameter_method(sample_xy)
@@ -199,6 +195,8 @@ def compute_range(min_angle, max_angle):
     if USE_GRAD == 0:
         bc_type = None
     else:
+        s_min_angle = get_angle_from_xy(sample_xy[0:1])
+        s_max_angle = get_angle_from_xy(sample_xy[-1:])
         bc_type = [[], []]
         grad_left = np.array([get_dx_div_dt(s_min_angle), get_dy_div_dt(s_min_angle)])
         grad_right = np.array([get_dx_div_dt(s_max_angle), get_dy_div_dt(s_max_angle)])
@@ -222,12 +220,10 @@ def compute_range(min_angle, max_angle):
     gt_xy = get_interface(gt_theta)
     test_error = evaluate.diff(pred_xy, gt_xy, order=2)
 
-    print('Sample Error: %s, Test Error: %s' % (sample_error, test_error))
-
     # assert is_same_end_points(pred, valid_xy)
     # print(len(pred_x), sample_error, valid_error)
     plt.plot(sample_xy[:, 0], sample_xy[:, 1], 'k*')
-    return pred_xy
+    return pred_xy, sample_error, test_error
 
 
 # plt.subplot(121)
@@ -240,12 +236,20 @@ max_angle = 3 * np.pi / 10
 # plt.subplot(122)
 # plt.title('pred')
 preds = []
+sample_error_sum = 0.0
+test_error_sum = 0.0
+count = 0
 for _ in range(10):
-    pred = compute_range(min_angle, max_angle)
+    pred, sample_error, test_error = compute_range(min_angle, max_angle)
     plt.plot(pred[:, 0], pred[:, 1], 'r')
     # preds.append(pred)
     min_angle += np.pi / 5
     max_angle += np.pi / 5
+    sample_error_sum += sample_error
+    test_error_sum += test_error
+    count += 1
+
+print('Sample Error: %s, Test Error: %s' % (sample_error_sum / count, test_error_sum / count))
 
 # pred = np.concatenate(preds, 0)
 # plt.plot(pred[:, 0], pred[:, 1], 'r')
